@@ -20,11 +20,13 @@ func main() {
 // run dispatches a single subcommand. It is the seam the CLI tests drive.
 func run(args []string, out io.Writer) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: slopfred <command> [args]\ncommands: init")
+		return fmt.Errorf("usage: slopfred <command> [args]\ncommands: init, add")
 	}
 	switch args[0] {
 	case "init":
 		return runInit(args[1:], out)
+	case "add":
+		return runAdd(args[1:], out)
 	default:
 		return fmt.Errorf("unknown command %q", args[0])
 	}
@@ -44,5 +46,18 @@ func runInit(args []string, out io.Writer) error {
 	} else {
 		fmt.Fprintf(out, "slopfred store already present at %s (remote updated)\n", res.Store.Root)
 	}
+	return nil
+}
+
+// runAdd wires `slopfred add <path>` to slopfred.Add.
+func runAdd(args []string, out io.Writer) error {
+	if len(args) != 1 {
+		return fmt.Errorf("usage: slopfred add <skill-folder-path>")
+	}
+	res, err := slopfred.Add(args[0])
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(out, "added skill %q (origin: local)\n", res.Name)
 	return nil
 }

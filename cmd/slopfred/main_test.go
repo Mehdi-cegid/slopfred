@@ -46,6 +46,49 @@ func TestRunUnknownCommand(t *testing.T) {
 	}
 }
 
+// TestRunAddWiring proves the CLI parses `add <path>` and drives the core;
+// add behaviour itself is proven at the core seam.
+func TestRunAddWiring(t *testing.T) {
+	base := t.TempDir()
+	home := filepath.Join(base, "store")
+	remote := filepath.Join(base, "remote.git")
+	if out, err := exec.Command("git", "init", "--bare", "-q", remote).CombinedOutput(); err != nil {
+		t.Fatalf("bare init: %v: %s", err, out)
+	}
+	t.Setenv("SLOPFRED_HOME", home)
+
+	var initBuf bytes.Buffer
+	if err := run([]string{"init", remote}, &initBuf); err != nil {
+		t.Fatalf("run init: %v", err)
+	}
+
+	src := filepath.Join(base, "demo")
+	if err := os.MkdirAll(src, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(src, "SKILL.md"), []byte("---\nname: demo\n---\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var buf bytes.Buffer
+	if err := run([]string{"add", src}, &buf); err != nil {
+		t.Fatalf("run add: %v", err)
+	}
+	if !strings.Contains(buf.String(), "added skill") {
+		t.Fatalf("unexpected output: %q", buf.String())
+	}
+	if _, err := os.Stat(filepath.Join(home, "skills", "demo", "SKILL.md")); err != nil {
+		t.Fatalf("add did not copy skill: %v", err)
+	}
+}
+
+func TestRunAddRequiresArg(t *testing.T) {
+	var buf bytes.Buffer
+	if err := run([]string{"add"}, &buf); err == nil {
+		t.Fatal("add with no path should error")
+	}
+}
+
 func TestRunNoArgs(t *testing.T) {
 	var buf bytes.Buffer
 	if err := run(nil, &buf); err == nil {
