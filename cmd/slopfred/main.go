@@ -21,7 +21,7 @@ func main() {
 // run dispatches a single subcommand. It is the seam the CLI tests drive.
 func run(args []string, out io.Writer) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: slopfred <command> [args]\ncommands: init, add, pack")
+		return fmt.Errorf("usage: slopfred <command> [args]\ncommands: init, add, pack, activate")
 	}
 	switch args[0] {
 	case "init":
@@ -30,6 +30,8 @@ func run(args []string, out io.Writer) error {
 		return runAdd(args[1:], out)
 	case "pack":
 		return runPack(args[1:], out)
+	case "activate":
+		return runActivate(args[1:], out)
 	default:
 		return fmt.Errorf("unknown command %q", args[0])
 	}
@@ -140,6 +142,59 @@ func runPack(args []string, out io.Writer) error {
 // packUsage reports the pack subcommand grammar.
 func packUsage() error {
 	return fmt.Errorf("usage: slopfred pack <create|add|remove|list> [args]")
+}
+
+// runActivate wires `slopfred activate <pack> --scope user|project` to
+// slopfred.Activate. Project scope populates the current working directory's
+// discovery trees; user scope populates the home dir's.
+func runActivate(args []string, out io.Writer) error {
+	pack, scope, err := parseActivateArgs(args)
+	if err != nil {
+		return err
+	}
+	root := ""
+	if scope == "project" {
+		if root, err = os.Getwd(); err != nil {
+			return fmt.Errorf("resolving working directory: %w", err)
+		}
+	}
+	res, err := slopfred.Activate(pack, scope, root)
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(out, "activated pack %q (%s scope): placed %s into %d discovery paths\n",
+		res.Pack, res.Scope, joinRefs(res.Folders), len(res.Targets))
+	return nil
+}
+
+// parseActivateArgs pulls the pack name and required --scope flag out of the
+// activate arguments in any order.
+func parseActivateArgs(args []string) (pack, scope string, err error) {
+	for i := 0; i < len(args); i++ {
+		switch {
+		case args[i] == "--scope":
+			if i+1 >= len(args) {
+				return "", "", activateUsage()
+			}
+			scope = args[i+1]
+			i++
+		case strings.HasPrefix(args[i], "--scope="):
+			scope = strings.TrimPrefix(args[i], "--scope=")
+		case pack == "":
+			pack = args[i]
+		default:
+			return "", "", activateUsage()
+		}
+	}
+	if pack == "" || scope == "" {
+		return "", "", activateUsage()
+	}
+	return pack, scope, nil
+}
+
+// activateUsage reports the activate command grammar.
+func activateUsage() error {
+	return fmt.Errorf("usage: slopfred activate <pack> --scope user|project")
 }
 
 // joinRefs renders a pack's refs for CLI output.
