@@ -55,6 +55,24 @@ func (s *Store) ReadManifest() (*Manifest, error) {
 	return &m, nil
 }
 
+// updateManifest reads the manifest, applies mutate to it, and writes it back.
+// It is the read-modify-write seam every operation that records origin or pack
+// data uses, so callers never hand-roll the load/save dance.
+func (s *Store) updateManifest(mutate func(*Manifest)) error {
+	m, err := s.ReadManifest()
+	if err != nil {
+		return err
+	}
+	if m.Packs == nil {
+		m.Packs = map[string][]string{}
+	}
+	if m.Skills == nil {
+		m.Skills = map[string]Origin{}
+	}
+	mutate(m)
+	return s.writeManifest(m)
+}
+
 // writeManifest serialises the manifest to the store root as pretty JSON.
 func (s *Store) writeManifest(m *Manifest) error {
 	data, err := json.MarshalIndent(m, "", "  ")
