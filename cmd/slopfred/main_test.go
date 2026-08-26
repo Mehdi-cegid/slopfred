@@ -131,6 +131,67 @@ func TestRunAddUpstreamWiring(t *testing.T) {
 	}
 }
 
+// TestRunPackWiring proves the CLI parses `pack create/add/list` and drives the
+// core; pack behaviour itself is proven at the core seam.
+func TestRunPackWiring(t *testing.T) {
+	base := t.TempDir()
+	home := filepath.Join(base, "store")
+	remote := filepath.Join(base, "remote.git")
+	if out, err := exec.Command("git", "init", "--bare", "-q", remote).CombinedOutput(); err != nil {
+		t.Fatalf("bare init: %v: %s", err, out)
+	}
+	t.Setenv("SLOPFRED_HOME", home)
+
+	var initBuf bytes.Buffer
+	if err := run([]string{"init", remote}, &initBuf); err != nil {
+		t.Fatalf("run init: %v", err)
+	}
+
+	// A skill to reference.
+	src := filepath.Join(base, "demo")
+	if err := os.MkdirAll(src, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(src, "SKILL.md"), []byte("---\nname: demo\n---\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var addBuf bytes.Buffer
+	if err := run([]string{"add", src}, &addBuf); err != nil {
+		t.Fatalf("run add: %v", err)
+	}
+
+	if err := run([]string{"pack", "create", "core"}, &bytes.Buffer{}); err != nil {
+		t.Fatalf("run pack create: %v", err)
+	}
+
+	var addRefBuf bytes.Buffer
+	if err := run([]string{"pack", "add", "core", "demo"}, &addRefBuf); err != nil {
+		t.Fatalf("run pack add: %v", err)
+	}
+	if !strings.Contains(addRefBuf.String(), "demo") {
+		t.Fatalf("unexpected pack add output: %q", addRefBuf.String())
+	}
+
+	var listBuf bytes.Buffer
+	if err := run([]string{"pack", "list"}, &listBuf); err != nil {
+		t.Fatalf("run pack list: %v", err)
+	}
+	if !strings.Contains(listBuf.String(), "core") {
+		t.Fatalf("pack list missing core: %q", listBuf.String())
+	}
+
+	if err := run([]string{"pack", "remove", "core", "demo"}, &bytes.Buffer{}); err != nil {
+		t.Fatalf("run pack remove: %v", err)
+	}
+}
+
+func TestRunPackRequiresSubcommand(t *testing.T) {
+	var buf bytes.Buffer
+	if err := run([]string{"pack"}, &buf); err == nil {
+		t.Fatal("pack with no subcommand should error")
+	}
+}
+
 func TestRunAddRequiresArg(t *testing.T) {
 	var buf bytes.Buffer
 	if err := run([]string{"add"}, &buf); err == nil {

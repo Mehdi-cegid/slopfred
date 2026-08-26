@@ -21,13 +21,15 @@ func main() {
 // run dispatches a single subcommand. It is the seam the CLI tests drive.
 func run(args []string, out io.Writer) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: slopfred <command> [args]\ncommands: init, add")
+		return fmt.Errorf("usage: slopfred <command> [args]\ncommands: init, add, pack")
 	}
 	switch args[0] {
 	case "init":
 		return runInit(args[1:], out)
 	case "add":
 		return runAdd(args[1:], out)
+	case "pack":
+		return runPack(args[1:], out)
 	default:
 		return fmt.Errorf("unknown command %q", args[0])
 	}
@@ -71,6 +73,81 @@ func runAdd(args []string, out io.Writer) error {
 	}
 	fmt.Fprintf(out, "added skill %q (origin: local)\n", res.Name)
 	return nil
+}
+
+// runPack wires `slopfred pack` curation to the core:
+//
+//	pack create <name>          create a named, empty pack
+//	pack add <pack> <skill>     add a skill reference to a pack
+//	pack remove <pack> <skill>  remove a skill reference from a pack
+//	pack list                   list pack names
+func runPack(args []string, out io.Writer) error {
+	if len(args) == 0 {
+		return packUsage()
+	}
+	switch args[0] {
+	case "create":
+		if len(args) != 2 {
+			return fmt.Errorf("usage: slopfred pack create <name>")
+		}
+		res, err := slopfred.CreatePack(args[1])
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(out, "created pack %q\n", res.Name)
+		return nil
+	case "add":
+		if len(args) != 3 {
+			return fmt.Errorf("usage: slopfred pack add <pack> <skill>")
+		}
+		res, err := slopfred.AddRef(args[1], args[2])
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(out, "pack %q now references: %s\n", res.Name, joinRefs(res.Refs))
+		return nil
+	case "remove":
+		if len(args) != 3 {
+			return fmt.Errorf("usage: slopfred pack remove <pack> <skill>")
+		}
+		res, err := slopfred.RemoveRef(args[1], args[2])
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(out, "pack %q now references: %s\n", res.Name, joinRefs(res.Refs))
+		return nil
+	case "list":
+		if len(args) != 1 {
+			return fmt.Errorf("usage: slopfred pack list")
+		}
+		names, err := slopfred.ListPacks()
+		if err != nil {
+			return err
+		}
+		if len(names) == 0 {
+			fmt.Fprintln(out, "no packs")
+			return nil
+		}
+		for _, name := range names {
+			fmt.Fprintln(out, name)
+		}
+		return nil
+	default:
+		return packUsage()
+	}
+}
+
+// packUsage reports the pack subcommand grammar.
+func packUsage() error {
+	return fmt.Errorf("usage: slopfred pack <create|add|remove|list> [args]")
+}
+
+// joinRefs renders a pack's refs for CLI output.
+func joinRefs(refs []string) string {
+	if len(refs) == 0 {
+		return "(empty)"
+	}
+	return strings.Join(refs, ", ")
 }
 
 // parseUpstreamArg splits an add argument into an upstream git URL and optional

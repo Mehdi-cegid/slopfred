@@ -99,14 +99,16 @@ func AddUpstream(url, subpath string) (*AddResult, error) {
 }
 
 // openStore resolves the store home and refuses if no store has been
-// initialised there.
+// initialised there. Its errors are prefixed store:, not with any one command,
+// because every operation (add, pack, …) opens the store through it and must
+// surface an honest, command-neutral message.
 func openStore() (*Store, error) {
 	root, err := Home()
 	if err != nil {
-		return nil, fmt.Errorf("add: resolving store home: %w", err)
+		return nil, fmt.Errorf("store: resolving store home: %w", err)
 	}
 	if !isGitRepo(root) {
-		return nil, fmt.Errorf("add: no slopfred store at %s (run init first)", root)
+		return nil, fmt.Errorf("store: no slopfred store at %s (run init first)", root)
 	}
 	return &Store{Root: root}, nil
 }
