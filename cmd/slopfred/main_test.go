@@ -246,6 +246,70 @@ func TestRunActivateRequiresScope(t *testing.T) {
 	}
 }
 
+// TestRunDeactivateWiring proves the CLI parses `deactivate <pack> --scope
+// project` and drives slopfred.Deactivate over the working directory, removing
+// the folder a prior activate placed; behaviour is proven at the core seam.
+func TestRunDeactivateWiring(t *testing.T) {
+	base := t.TempDir()
+	home := filepath.Join(base, "store")
+	remote := filepath.Join(base, "remote.git")
+	if out, err := exec.Command("git", "init", "--bare", "-q", remote).CombinedOutput(); err != nil {
+		t.Fatalf("bare init: %v: %s", err, out)
+	}
+	t.Setenv("SLOPFRED_HOME", home)
+
+	if err := run([]string{"init", remote}, &bytes.Buffer{}); err != nil {
+		t.Fatalf("run init: %v", err)
+	}
+	src := filepath.Join(base, "demo")
+	if err := os.MkdirAll(src, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(src, "SKILL.md"), []byte("---\nname: demo\n---\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := run([]string{"add", src}, &bytes.Buffer{}); err != nil {
+		t.Fatalf("run add: %v", err)
+	}
+	if err := run([]string{"pack", "create", "core"}, &bytes.Buffer{}); err != nil {
+		t.Fatalf("run pack create: %v", err)
+	}
+	if err := run([]string{"pack", "add", "core", "demo"}, &bytes.Buffer{}); err != nil {
+		t.Fatalf("run pack add: %v", err)
+	}
+
+	project := filepath.Join(base, "project")
+	if err := os.MkdirAll(project, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cwd, _ := os.Getwd()
+	if err := os.Chdir(project); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chdir(cwd)
+
+	if err := run([]string{"activate", "core", "--scope", "project"}, &bytes.Buffer{}); err != nil {
+		t.Fatalf("run activate: %v", err)
+	}
+
+	var buf bytes.Buffer
+	if err := run([]string{"deactivate", "core", "--scope", "project"}, &buf); err != nil {
+		t.Fatalf("run deactivate: %v", err)
+	}
+	if !strings.Contains(buf.String(), "deactivated pack") {
+		t.Fatalf("unexpected deactivate output: %q", buf.String())
+	}
+	if _, err := os.Stat(filepath.Join(project, ".agents", "skills", "demo")); !os.IsNotExist(err) {
+		t.Fatalf("deactivate did not remove placed skill: err=%v", err)
+	}
+}
+
+func TestRunDeactivateRequiresScope(t *testing.T) {
+	if err := run([]string{"deactivate", "core"}, &bytes.Buffer{}); err == nil {
+		t.Fatal("deactivate without --scope should error")
+	}
+}
+
 func TestRunPackRequiresSubcommand(t *testing.T) {
 	var buf bytes.Buffer
 	if err := run([]string{"pack"}, &buf); err == nil {
