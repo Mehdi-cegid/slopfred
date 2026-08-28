@@ -21,7 +21,7 @@ func main() {
 // run dispatches a single subcommand. It is the seam the CLI tests drive.
 func run(args []string, out io.Writer) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: slopfred <command> [args]\ncommands: init, add, pack, activate, sync")
+		return fmt.Errorf("usage: slopfred <command> [args]\ncommands: init, add, pack, activate, sync, update")
 	}
 	switch args[0] {
 	case "init":
@@ -34,6 +34,8 @@ func run(args []string, out io.Writer) error {
 		return runActivate(args[1:], out)
 	case "sync":
 		return runSync(args[1:], out)
+	case "update":
+		return runUpdate(args[1:], out)
 	default:
 		return fmt.Errorf("unknown command %q", args[0])
 	}
@@ -185,6 +187,44 @@ func runSync(args []string, out io.Writer) error {
 		fmt.Fprintf(out, "synced store (branch %s): no local changes, pulled and pushed\n", res.Branch)
 	}
 	return nil
+}
+
+// runUpdate wires `slopfred update [<skill>]` to slopfred.Update. With a skill
+// name it updates just that upstream skill; with no argument it updates every
+// eligible upstream skill, reporting which advanced and which were refused for
+// having diverged from their pin.
+func runUpdate(args []string, out io.Writer) error {
+	if len(args) > 1 {
+		return fmt.Errorf("usage: slopfred update [<skill>]")
+	}
+	name := ""
+	if len(args) == 1 {
+		name = args[0]
+	}
+	res, err := slopfred.Update(name)
+	if err != nil {
+		return err
+	}
+	if len(res.Updated) == 0 && len(res.Refused) == 0 {
+		fmt.Fprintln(out, "update: upstream skills already up to date")
+		return nil
+	}
+	for _, u := range res.Updated {
+		fmt.Fprintf(out, "updated %q: %s -> %s\n", u.Name, shortSHA(u.OldCommit), shortSHA(u.NewCommit))
+	}
+	for _, n := range res.Refused {
+		fmt.Fprintf(out, "refused %q: local copy has diverged from its pin; left unchanged\n", n)
+	}
+	return nil
+}
+
+// shortSHA abbreviates a commit for CLI output, leaving short or empty values
+// as-is.
+func shortSHA(sha string) string {
+	if len(sha) > 12 {
+		return sha[:12]
+	}
+	return sha
 }
 
 // parseActivateArgs pulls the pack name and required --scope flag out of the
