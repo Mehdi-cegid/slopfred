@@ -266,3 +266,30 @@ func TestRunNoArgs(t *testing.T) {
 		t.Fatal("no args should error with usage")
 	}
 }
+
+func TestRunSyncWiring(t *testing.T) {
+	base := t.TempDir()
+	home := filepath.Join(base, "store")
+	remote := filepath.Join(base, "remote.git")
+	if out, err := exec.Command("git", "init", "--bare", "-q", remote).CombinedOutput(); err != nil {
+		t.Fatalf("bare init: %v: %s", err, out)
+	}
+	t.Setenv("SLOPFRED_HOME", home)
+
+	if err := run([]string{"init", remote}, &bytes.Buffer{}); err != nil {
+		t.Fatalf("run init: %v", err)
+	}
+
+	var buf bytes.Buffer
+	if err := run([]string{"sync"}, &buf); err != nil {
+		t.Fatalf("run sync: %v", err)
+	}
+	if !strings.Contains(buf.String(), "synced store") {
+		t.Fatalf("unexpected sync output: %q", buf.String())
+	}
+
+	// Extra args are rejected.
+	if err := run([]string{"sync", "extra"}, &bytes.Buffer{}); err == nil {
+		t.Fatal("sync with extra args should error")
+	}
+}

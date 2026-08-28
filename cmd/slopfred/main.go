@@ -21,7 +21,7 @@ func main() {
 // run dispatches a single subcommand. It is the seam the CLI tests drive.
 func run(args []string, out io.Writer) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: slopfred <command> [args]\ncommands: init, add, pack, activate")
+		return fmt.Errorf("usage: slopfred <command> [args]\ncommands: init, add, pack, activate, sync")
 	}
 	switch args[0] {
 	case "init":
@@ -32,6 +32,8 @@ func run(args []string, out io.Writer) error {
 		return runPack(args[1:], out)
 	case "activate":
 		return runActivate(args[1:], out)
+	case "sync":
+		return runSync(args[1:], out)
 	default:
 		return fmt.Errorf("unknown command %q", args[0])
 	}
@@ -164,6 +166,24 @@ func runActivate(args []string, out io.Writer) error {
 	}
 	fmt.Fprintf(out, "activated pack %q (%s scope): placed %s into %d discovery paths\n",
 		res.Pack, res.Scope, joinRefs(res.Folders), len(res.Targets))
+	return nil
+}
+
+// runSync wires `slopfred sync` to slopfred.Sync: a git pull then push of the
+// store against its configured remote. It takes no arguments.
+func runSync(args []string, out io.Writer) error {
+	if len(args) != 0 {
+		return fmt.Errorf("usage: slopfred sync")
+	}
+	res, err := slopfred.Sync()
+	if err != nil {
+		return err
+	}
+	if res.Committed {
+		fmt.Fprintf(out, "synced store (branch %s): snapshotted local changes and pushed\n", res.Branch)
+	} else {
+		fmt.Fprintf(out, "synced store (branch %s): no local changes, pulled and pushed\n", res.Branch)
+	}
 	return nil
 }
 

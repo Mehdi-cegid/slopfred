@@ -43,3 +43,26 @@ func setRemote(dir, name, url string) error {
 	_, err := git(dir, "remote", "set-url", name, url)
 	return err
 }
+
+// currentBranch returns the checked-out branch name, or "" when the working
+// tree has no commits yet (a fresh git init sits on an unborn branch).
+func currentBranch(dir string) string {
+	out, err := git(dir, "rev-parse", "--abbrev-ref", "HEAD")
+	if err != nil || out == "HEAD" {
+		return ""
+	}
+	return out
+}
+
+// hasCommits reports whether dir has at least one commit on its current branch.
+func hasCommits(dir string) bool {
+	_, err := git(dir, "rev-parse", "--verify", "-q", "HEAD")
+	return err == nil
+}
+
+// remoteHasBranch reports whether the named branch exists on remote. It is how
+// sync tells a first-ever push (empty remote) from a later pull-then-push.
+func remoteHasBranch(dir, remote, branch string) bool {
+	out, err := git(dir, "ls-remote", "--heads", remote, branch)
+	return err == nil && strings.TrimSpace(out) != ""
+}
