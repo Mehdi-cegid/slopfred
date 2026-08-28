@@ -21,7 +21,7 @@ func main() {
 // run dispatches a single subcommand. It is the seam the CLI tests drive.
 func run(args []string, out io.Writer) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: slopfred <command> [args]\ncommands: init, add, pack, activate, sync, update")
+		return fmt.Errorf("usage: slopfred <command> [args]\ncommands: init, add, pack, activate, deactivate, sync, update")
 	}
 	switch args[0] {
 	case "init":
@@ -32,6 +32,8 @@ func run(args []string, out io.Writer) error {
 		return runPack(args[1:], out)
 	case "activate":
 		return runActivate(args[1:], out)
+	case "deactivate":
+		return runDeactivate(args[1:], out)
 	case "sync":
 		return runSync(args[1:], out)
 	case "update":
@@ -152,7 +154,7 @@ func packUsage() error {
 // slopfred.Activate. Project scope populates the current working directory's
 // discovery trees; user scope populates the home dir's.
 func runActivate(args []string, out io.Writer) error {
-	pack, scope, err := parseActivateArgs(args)
+	pack, scope, err := parseScopedPackArgs(args, "activate")
 	if err != nil {
 		return err
 	}
@@ -167,6 +169,30 @@ func runActivate(args []string, out io.Writer) error {
 		return err
 	}
 	fmt.Fprintf(out, "activated pack %q (%s scope): placed %s into %d discovery paths\n",
+		res.Pack, res.Scope, joinRefs(res.Folders), len(res.Targets))
+	return nil
+}
+
+// runDeactivate wires `slopfred deactivate <pack> --scope user|project` to
+// slopfred.Deactivate. It resolves the same scope root Activate used — the
+// current working directory for project scope — so the matching activation is
+// found and only its recorded folders are removed.
+func runDeactivate(args []string, out io.Writer) error {
+	pack, scope, err := parseScopedPackArgs(args, "deactivate")
+	if err != nil {
+		return err
+	}
+	root := ""
+	if scope == "project" {
+		if root, err = os.Getwd(); err != nil {
+			return fmt.Errorf("resolving working directory: %w", err)
+		}
+	}
+	res, err := slopfred.Deactivate(pack, scope, root)
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(out, "deactivated pack %q (%s scope): removed %s from %d discovery paths\n",
 		res.Pack, res.Scope, joinRefs(res.Folders), len(res.Targets))
 	return nil
 }
@@ -227,14 +253,15 @@ func shortSHA(sha string) string {
 	return sha
 }
 
-// parseActivateArgs pulls the pack name and required --scope flag out of the
-// activate arguments in any order.
-func parseActivateArgs(args []string) (pack, scope string, err error) {
+// parseScopedPackArgs pulls the pack name and required --scope flag out of the
+// arguments in any order, shared by the activate and deactivate commands (cmd
+// names the command for the usage error).
+func parseScopedPackArgs(args []string, cmd string) (pack, scope string, err error) {
 	for i := 0; i < len(args); i++ {
 		switch {
 		case args[i] == "--scope":
 			if i+1 >= len(args) {
-				return "", "", activateUsage()
+				return "", "", scopedPackUsage(cmd)
 			}
 			scope = args[i+1]
 			i++
@@ -243,18 +270,18 @@ func parseActivateArgs(args []string) (pack, scope string, err error) {
 		case pack == "":
 			pack = args[i]
 		default:
-			return "", "", activateUsage()
+			return "", "", scopedPackUsage(cmd)
 		}
 	}
 	if pack == "" || scope == "" {
-		return "", "", activateUsage()
+		return "", "", scopedPackUsage(cmd)
 	}
 	return pack, scope, nil
 }
 
-// activateUsage reports the activate command grammar.
-func activateUsage() error {
-	return fmt.Errorf("usage: slopfred activate <pack> --scope user|project")
+// scopedPackUsage reports the grammar shared by activate and deactivate.
+func scopedPackUsage(cmd string) error {
+	return fmt.Errorf("usage: slopfred %s <pack> --scope user|project", cmd)
 }
 
 // joinRefs renders a pack's refs for CLI output.
