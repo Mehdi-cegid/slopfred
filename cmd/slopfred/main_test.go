@@ -293,3 +293,33 @@ func TestRunSyncWiring(t *testing.T) {
 		t.Fatal("sync with extra args should error")
 	}
 }
+
+// TestRunUpdateWiring proves the CLI parses `update` and drives slopfred.Update;
+// update behaviour itself is proven at the core seam. With no upstream skills the
+// store is already current, so the command reports that and succeeds.
+func TestRunUpdateWiring(t *testing.T) {
+	base := t.TempDir()
+	home := filepath.Join(base, "store")
+	remote := filepath.Join(base, "remote.git")
+	if out, err := exec.Command("git", "init", "--bare", "-q", remote).CombinedOutput(); err != nil {
+		t.Fatalf("bare init: %v: %s", err, out)
+	}
+	t.Setenv("SLOPFRED_HOME", home)
+
+	if err := run([]string{"init", remote}, &bytes.Buffer{}); err != nil {
+		t.Fatalf("run init: %v", err)
+	}
+
+	var buf bytes.Buffer
+	if err := run([]string{"update"}, &buf); err != nil {
+		t.Fatalf("run update: %v", err)
+	}
+	if !strings.Contains(buf.String(), "up to date") {
+		t.Fatalf("unexpected update output: %q", buf.String())
+	}
+
+	// Too many args are rejected.
+	if err := run([]string{"update", "a", "b"}, &bytes.Buffer{}); err == nil {
+		t.Fatal("update with extra args should error")
+	}
+}
