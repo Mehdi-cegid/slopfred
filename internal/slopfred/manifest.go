@@ -30,6 +30,13 @@ type Origin struct {
 	Commit string `json:"commit,omitempty"`
 }
 
+// IsUpstream reports whether this origin points to a pinned upstream git
+// source. Callers use this semantic query instead of depending on the manifest's
+// string discriminator.
+func (o Origin) IsUpstream() bool {
+	return o.Kind == originUpstream
+}
+
 // manifestVersion is the current sidecar manifest schema version.
 const manifestVersion = 1
 

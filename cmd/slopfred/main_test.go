@@ -387,3 +387,31 @@ func TestRunUpdateWiring(t *testing.T) {
 		t.Fatal("update with extra args should error")
 	}
 }
+
+// TestRunStatusWiring proves the CLI accepts no extra arguments and dispatches
+// to the core status operation; status behaviour is proven at the core seam.
+func TestRunStatusWiring(t *testing.T) {
+	base := t.TempDir()
+	home := filepath.Join(base, "store")
+	remote := filepath.Join(base, "remote.git")
+	if out, err := exec.Command("git", "init", "--bare", "-q", remote).CombinedOutput(); err != nil {
+		t.Fatalf("bare init: %v: %s", err, out)
+	}
+	t.Setenv("SLOPFRED_HOME", home)
+
+	if err := run([]string{"init", remote}, &bytes.Buffer{}); err != nil {
+		t.Fatalf("run init: %v", err)
+	}
+
+	var buf bytes.Buffer
+	if err := run([]string{"status"}, &buf); err != nil {
+		t.Fatalf("run status: %v", err)
+	}
+	if !strings.Contains(buf.String(), "store: "+home) {
+		t.Fatalf("unexpected status output: %q", buf.String())
+	}
+
+	if err := run([]string{"status", "extra"}, &bytes.Buffer{}); err == nil {
+		t.Fatal("status with extra args should error")
+	}
+}

@@ -21,7 +21,7 @@ func main() {
 // run dispatches a single subcommand. It is the seam the CLI tests drive.
 func run(args []string, out io.Writer) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: slopfred <command> [args]\ncommands: init, add, pack, activate, deactivate, sync, update")
+		return fmt.Errorf("usage: slopfred <command> [args]\ncommands: init, add, pack, activate, deactivate, sync, update, status")
 	}
 	switch args[0] {
 	case "init":
@@ -38,6 +38,8 @@ func run(args []string, out io.Writer) error {
 		return runSync(args[1:], out)
 	case "update":
 		return runUpdate(args[1:], out)
+	case "status":
+		return runStatus(args[1:], out)
 	default:
 		return fmt.Errorf("unknown command %q", args[0])
 	}
@@ -242,6 +244,59 @@ func runUpdate(args []string, out io.Writer) error {
 		fmt.Fprintf(out, "refused %q: local copy has diverged from its pin; left unchanged\n", n)
 	}
 	return nil
+}
+
+// runStatus wires `slopfred status` to slopfred.Status and renders its complete
+// snapshot: canonical skills with origin, packs, and this device's activations.
+func runStatus(args []string, out io.Writer) error {
+	if len(args) != 0 {
+		return fmt.Errorf("usage: slopfred status")
+	}
+	res, err := slopfred.Status()
+	if err != nil {
+		return err
+	}
+
+	fmt.Fprintf(out, "store: %s\n", res.Store.Root)
+	fmt.Fprintln(out, "skills:")
+	if len(res.Skills) == 0 {
+		fmt.Fprintln(out, "  (none)")
+	}
+	for _, skill := range res.Skills {
+		fmt.Fprintf(out, "  %s (%s)\n", skill.Name, formatOrigin(skill.Origin))
+	}
+
+	fmt.Fprintln(out, "packs:")
+	if len(res.Packs) == 0 {
+		fmt.Fprintln(out, "  (none)")
+	}
+	for _, pack := range res.Packs {
+		fmt.Fprintf(out, "  %s: %s\n", pack.Name, joinRefs(pack.Refs))
+	}
+
+	fmt.Fprintln(out, "activations:")
+	if len(res.Activations) == 0 {
+		fmt.Fprintln(out, "  (none)")
+	}
+	for _, activation := range res.Activations {
+		fmt.Fprintf(out, "  %s (%s)\n", activation.Pack, activation.Scope)
+		fmt.Fprintf(out, "    targets: %s\n", joinRefs(activation.Targets))
+		fmt.Fprintf(out, "    skills: %s\n", joinRefs(activation.Folders))
+	}
+	return nil
+}
+
+// formatOrigin renders provenance without losing an upstream's URL, optional
+// subpath, or pin.
+func formatOrigin(origin slopfred.Origin) string {
+	if !origin.IsUpstream() {
+		return origin.Kind
+	}
+	source := origin.URL
+	if origin.Subpath != "" {
+		source += "#" + origin.Subpath
+	}
+	return fmt.Sprintf("upstream %s @ %s", source, origin.Commit)
 }
 
 // shortSHA abbreviates a commit for CLI output, leaving short or empty values

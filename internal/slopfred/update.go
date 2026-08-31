@@ -63,7 +63,7 @@ func Update(name string) (*UpdateResult, error) {
 		if !ok {
 			return nil, fmt.Errorf("update: no skill %q in the store", name)
 		}
-		if origin.Kind != originUpstream {
+		if !origin.IsUpstream() {
 			return nil, fmt.Errorf("update: skill %q is local; only upstream skills can be updated", name)
 		}
 		updated, err := store.updateSkill(name, origin)
@@ -87,7 +87,7 @@ func Update(name string) (*UpdateResult, error) {
 
 	for _, n := range names {
 		origin := m.Skills[n]
-		if origin.Kind != originUpstream {
+		if !origin.IsUpstream() {
 			continue
 		}
 		updated, err := store.updateSkill(n, origin)
